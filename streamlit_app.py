@@ -112,15 +112,40 @@ st.markdown("""
 /* Centered narrow chat column */
 .block-container {
     max-width: 720px !important;
-    padding-top: 2rem !important;
-    padding-bottom: 0 !important;
+    padding-top: 4.5rem !important;
+    padding-bottom: 6rem !important;
+    overflow: visible !important;
+}
+
+header[data-testid="stHeader"] {
+    background: transparent !important;
 }
 
 /* Smaller, subtle header */
-h1 {
-    font-size: 1.4rem !important;
-    font-weight: 600 !important;
-    margin-bottom: 0.2rem !important;
+.app-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.4rem 0 0.3rem 0;
+    overflow: visible;
+    line-height: 1.4;
+}
+
+.app-header img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.app-header span {
+    font-size: 1.4rem;
+    font-weight: 600;
+    line-height: 1.5;
+    display: inline-block;
+    padding-top: 0.15rem;
 }
 
 /* Shrink caption */
@@ -167,9 +192,9 @@ h1 {
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
-    <img src="app/static/bot_avatar.jpg" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
-    <span style="font-size: 1.4rem; font-weight: 600;">Yu-Gi-Oh! RAG Chatbot</span>
+<div class="app-header">
+    <img src="app/static/bot_avatar.jpg" alt="Kuriboh">
+    <span>Yu-Gi-Oh! RAG Chatbot</span>
 </div>
 """, unsafe_allow_html=True)
 st.caption("Ask anything about Yu-Gi-Oh! cards")
