@@ -7,6 +7,7 @@ import streamlit as st
 import os
 from sentence_transformers import SentenceTransformer
 import chromadb
+import difflib
 from langchain_ollama import ChatOllama
 from dotenv import load_dotenv
 
@@ -41,13 +42,19 @@ def retrieve_relevant_cards(query, k=5):
     return list(zip(docs, metadatas))
 
 
-def retrieve_by_archetype(archetype_name, k=30):
+def retrieve_by_archetype_and_type(archetype_name, type_keyword=None, k=30):
+    fetch_k = 200 if type_keyword else k
     results = collection.query(
         query_embeddings=model.encode([archetype_name]).tolist(),
-        n_results=k,
+        n_results=fetch_k,
         where={"archetype": archetype_name}
     )
-    return list(zip(results["documents"][0], results["metadatas"][0]))
+    docs = results["documents"][0]
+    metas = results["metadatas"][0]
+    if type_keyword:
+        filtered = [(d, m) for d, m in zip(docs, metas) if type_keyword.lower() in m.get("type", "").lower()]
+        return filtered[:k]
+    return list(zip(docs, metas))[:k]
 
 
 def classify_intent(question: str) -> str:
@@ -245,7 +252,19 @@ if prompt:
 
     # Generate answer
     with st.chat_message("assistant", avatar=BOT_AVATAR):
-        intent = classify_intent(prompt)
+        p_lower = prompt.lower()
+        p_words = set(p_lower.replace("?", "").replace(".", "").replace(",", "").split())
+        
+        # 1. Check for follow-up signals BEFORE intent classification
+        is_follow_up = False
+        if st.session_state.get("cached_sources") is not None and (
+            "how many" in p_lower or "total" in p_lower or
+            "those" in p_lower or "these" in p_lower or "more than" in p_lower or
+            len(prompt.strip().split()) <= 4
+        ):
+            is_follow_up = True
+
+        intent = "card_question" if is_follow_up else classify_intent(prompt)
         
         if intent == "general":
             response = llm.invoke(f"You are a friendly Yu-Gi-Oh card assistant. Respond naturally and briefly to this message: {prompt}")
@@ -253,32 +272,48 @@ if prompt:
             st.markdown(answer)
             sources = []
         else:
-            # Check for archetype/listing request first (Bypass LLM for accuracy)
-            if "archetype" in prompt.lower() or "cards in" in prompt.lower():
+            # 2. Check for archetype/listing request (fuzzy fallback for typos)
+            is_archetype_query = (
+                "archetype" in p_lower or 
+                "cards in" in p_lower or 
+                bool(difflib.get_close_matches("archetype", p_words, cutoff=0.75)) or 
+                ("type" in p_words)
+            )
+
+            if is_archetype_query and not is_follow_up:
                 with st.status("Thinking...", expanded=True) as status:
                     st.write("🔍 Searching for relevant cards...")
                     sources = retrieve_relevant_cards(prompt, k=5)
                     guessed_archetype = sources[0][1].get("archetype", "")
+                    
                     if guessed_archetype:
                         st.write(f"🎯 Archetype identified: **{guessed_archetype}**")
-                        sources = retrieve_by_archetype(guessed_archetype, k=30)
+                        
+                        # 3. Detect specific extra type filter (e.g., fusion, synchro)
+                        detected_type = None
+                        for t in ["fusion", "synchro", "xyz", "ritual", "link", "pendulum", "effect", "normal"]:
+                            if t in p_lower:
+                                detected_type = t
+                                break
+                                
+                        if detected_type:
+                            st.write(f"🔎 Filtering by type: **{detected_type.capitalize()}**")
+                            
+                        sources = retrieve_by_archetype_and_type(guessed_archetype, detected_type, k=40)
                         card_list = "\n".join(f"- **{meta.get('name', 'Unknown')}**" for _, meta in sources)
-                        answer = f"Cards in the **{guessed_archetype}** archetype ({len(sources)} found):\n\n{card_list}"
+                        
+                        type_str = f"{detected_type.capitalize()} " if detected_type else ""
+                        answer = f"{type_str}Cards in the **{guessed_archetype}** archetype ({len(sources)} found):\n\n{card_list}"
                     else:
                         answer = "I couldn't identify the archetype. Could you be more specific?"
                     status.update(label="Done", state="complete", expanded=False)
                 st.markdown(answer)
             else:
-                # Standard RAG flow for other questions
+                # Standard RAG flow for other questions OR follow-ups
                 with st.status("Thinking...", expanded=True) as status:
                     st.write("🔍 Searching for relevant cards...")
                     
-                    # Check for cached follow-up
-                    if st.session_state.get("cached_sources") is not None and (
-                        "how many" in prompt.lower() or "total" in prompt.lower() or
-                        "those cards" in prompt.lower() or "these cards" in prompt.lower() or
-                        len(prompt.strip().split()) <= 3
-                    ):
+                    if is_follow_up:
                         sources = st.session_state.cached_sources
                     else:
                         sources = retrieve_relevant_cards(prompt, k=5)
