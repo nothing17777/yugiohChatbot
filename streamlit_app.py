@@ -72,10 +72,48 @@ BOT_AVATAR = "assets/bot_avatar.jpg"
 # Streamlit UI
 st.set_page_config(page_title="Yu-Gi-Oh! RAG Chatbot", page_icon="assets/bot_avatar.jpg", layout="wide")
 
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 with st.sidebar:
-    st.button("＋ New chat")
-    st.button("🔍 Search")
-    st.button("💬 History")
+    if st.button("＋ New chat"):
+        if st.session_state.get("messages"):
+            # save a short label (first user message) + full transcript
+            title = st.session_state.messages[0]["content"][:40]
+            st.session_state.chat_history.append({"title": title, "messages": list(st.session_state.messages)})
+        st.session_state.messages = []
+        st.session_state.cached_sources = None
+        st.rerun()
+
+    # Search Box
+    search_query = st.text_input("Search chats", "").strip().lower()
+
+    st.markdown("---")
+    st.caption("History")
+    
+    # Filter and display history
+    for i, chat in enumerate(reversed(st.session_state.chat_history)):
+        # reverse index to keep proper clicking order
+        actual_i = len(st.session_state.chat_history) - 1 - i
+        
+        # Check against search query
+        match = False
+        if not search_query:
+            match = True
+        else:
+            if search_query in chat["title"].lower():
+                match = True
+            else:
+                for m in chat["messages"]:
+                    if search_query in m["content"].lower():
+                        match = True
+                        break
+        
+        if match:
+            if st.button(f"{chat['title']}", key=f"history_{actual_i}"):
+                st.session_state.messages = list(chat["messages"])
+                st.session_state.cached_sources = None
+                st.rerun()
 
 st.markdown("""
 <style>

@@ -1,8 +1,10 @@
-venv/
-__pycache__/
-*.pyc
 .env
+venv/
 yugioh_db/
 all_cards.json
+.ipynb_checkpoints/
+.claude/
+__pycache__/
 *.pdf
+*.pyc
 .DS_Store
