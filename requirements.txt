@@ -1,0 +1,6 @@
+streamlit
+sentence-transformers
+chromadb
+langchain-ollama
+python-dotenv
+requests
