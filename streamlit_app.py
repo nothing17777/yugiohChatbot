@@ -113,41 +113,47 @@ if prompt:
 
     # Generate answer
     with st.chat_message("assistant"):
-        with st.status("Thinking...", expanded=True) as status:
-            st.write("🔍 Searching for relevant cards...")
-            
-            # Use cached sources if provided and question looks like a follow-up
-            if st.session_state.get("cached_sources") is not None and (
-                "how many" in prompt.lower() or 
-                "total" in prompt.lower() or
-                "those cards" in prompt.lower() or
-                "these cards" in prompt.lower() or
-                len(prompt.strip().split()) <= 3
-            ):
-                st.write("🔄 Using previous context for follow-up...")
-                sources = st.session_state.cached_sources
-            else:
-                # crude check: does the question look like an archetype listing request?
-                if "archetype" in prompt.lower() or "cards in" in prompt.lower():
-                    st.write("📋 Detected archetype question — filtering by archetype match")
-                    sources = retrieve_relevant_cards(prompt, k=5)
-                    guessed_archetype = sources[0][1].get("archetype", "")
-                    if guessed_archetype:
-                        st.write(f"🎯 Archetype identified: **{guessed_archetype}**")
-                        sources = retrieve_by_archetype(guessed_archetype, k=30)
+        # Check for archetype/listing request first (Bypass LLM for accuracy)
+        if "archetype" in prompt.lower() or "cards in" in prompt.lower():
+            with st.status("Thinking...", expanded=True) as status:
+                st.write("🔍 Searching for relevant cards...")
+                sources = retrieve_relevant_cards(prompt, k=5)
+                guessed_archetype = sources[0][1].get("archetype", "")
+                if guessed_archetype:
+                    st.write(f"🎯 Archetype identified: **{guessed_archetype}**")
+                    sources = retrieve_by_archetype(guessed_archetype, k=30)
+                    card_list = "\n".join(f"- **{meta.get('name', 'Unknown')}**" for _, meta in sources)
+                    answer = f"Cards in the **{guessed_archetype}** archetype ({len(sources)} found):\n\n{card_list}"
+                else:
+                    answer = "I couldn't identify the archetype. Could you be more specific?"
+                status.update(label="Done", state="complete", expanded=False)
+            st.markdown(answer)
+        else:
+            # Standard RAG flow for other questions
+            with st.status("Thinking...", expanded=True) as status:
+                st.write("🔍 Searching for relevant cards...")
+                
+                # Check for cached follow-up
+                if st.session_state.get("cached_sources") is not None and (
+                    "how many" in prompt.lower() or "total" in prompt.lower() or
+                    "those cards" in prompt.lower() or "these cards" in prompt.lower() or
+                    len(prompt.strip().split()) <= 3
+                ):
+                    sources = st.session_state.cached_sources
                 else:
                     sources = retrieve_relevant_cards(prompt, k=5)
 
-            st.write(f"✅ Found {len(sources)} relevant card(s)")
-            st.write("📚 Retrieved cards: " + ", ".join(meta.get("name", "Unknown") for _, meta in sources[:5]))
-            st.write("🤖 Generating answer...")
+                st.write(f"✅ Found {len(sources)} relevant card(s)")
+                st.write("🤖 Generating answer...")
+                
+                context = "\n\n".join(doc for doc, _ in sources)
+                history_text = "\n".join(f"{m['role']}: {m['content']}" for m in st.session_state.messages[-6:])
+                
+                prompt_text = f"""Answer using ONLY the card names and facts listed in the context below.
+Format your answer as a markdown bulleted list, one card per line, like this:
+- **Card Name** — ATK/DEF, effect summary.
 
-            context = "\n\n".join(doc for doc, _ in sources)
-            history_text = "\n".join(f"{m['role']}: {m['content']}" for m in st.session_state.messages[-6:])
-
-            prompt_text = f"""Answer using ONLY the card names and facts listed in the context below.
-Do not invent or guess any card names. If a card is not listed in the context, do not mention it.
-If the question refers to something from earlier in the conversation (like "how many" or "those cards"), use the conversation history to understand what is being asked.
+If simply listing cards, just list names cleanly.
 
 Conversation so far:
 {history_text}
@@ -157,23 +163,20 @@ Context:
 
 Question: {prompt}
 Answer:"""
-            response = llm.invoke(prompt_text)
-            answer = response.content
+                response = llm.invoke(prompt_text)
+                answer = response.content
+                status.update(label="Done", state="complete", expanded=False)
             
-            status.update(label="Done", state="complete", expanded=False)
+            st.markdown(answer)
 
-        st.write(answer)
-        # Sources expander with images
+        # Sources expander
         with st.expander("Sources"):
             for doc, meta in sources:
-                name = meta.get("name", "")
-                type_ = meta.get("type", "")
-                st.markdown(f"**{name}** ({type_})")
-                if "image_url" in meta and meta["image_url"]:
+                st.markdown(f"**{meta.get('name', '')}** ({meta.get('type', '')})")
+                if meta.get("image_url"):
                     st.image(meta["image_url"], width=200)
                 st.write(doc)
                 st.markdown("---")
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
-    # Cache the sources for potential follow-up questions like "how many total"
     st.session_state.cached_sources = sources
