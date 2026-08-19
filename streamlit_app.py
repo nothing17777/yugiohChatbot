@@ -1,3 +1,8 @@
+import warnings
+import logging
+warnings.filterwarnings("ignore")
+logging.getLogger("transformers").setLevel(logging.CRITICAL)
+
 import streamlit as st
 import os
 from sentence_transformers import SentenceTransformer
