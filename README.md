@@ -25,4 +25,7 @@ streamlit run streamlit_app.py
 
 ## Requirements
 - Python 3.10+
-- [Ollama](https://ollama.com/) with `qwen2.5:7b-instruct` pulled (`ollama pull qwen2.5:7b-instruct`)
+- [Ollama](https://ollama.com/) with any local model pulled. The default is `qwen2.5:7b-instruct`, but you can use any Ollama model by replacing the model name in `streamlit_app.py`:
+  ```python
+  llm = ChatOllama(model="your-model-here")
+  ```
