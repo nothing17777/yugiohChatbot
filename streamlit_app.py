@@ -112,11 +112,56 @@ if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Generate answer
-    with st.spinner("Retrieving info and generating answer..."):
-        answer, sources = generate_answer(prompt, st.session_state.messages, st.session_state.get("cached_sources", None))
-
-    # Show assistant answer
     with st.chat_message("assistant"):
+        with st.status("Thinking...", expanded=True) as status:
+            st.write("🔍 Searching for relevant cards...")
+            
+            # Use cached sources if provided and question looks like a follow-up
+            if st.session_state.get("cached_sources") is not None and (
+                "how many" in prompt.lower() or 
+                "total" in prompt.lower() or
+                "those cards" in prompt.lower() or
+                "these cards" in prompt.lower() or
+                len(prompt.strip().split()) <= 3
+            ):
+                st.write("🔄 Using previous context for follow-up...")
+                sources = st.session_state.cached_sources
+            else:
+                # crude check: does the question look like an archetype listing request?
+                if "archetype" in prompt.lower() or "cards in" in prompt.lower():
+                    st.write("📋 Detected archetype question — filtering by archetype match")
+                    sources = retrieve_relevant_cards(prompt, k=5)
+                    guessed_archetype = sources[0][1].get("archetype", "")
+                    if guessed_archetype:
+                        st.write(f"🎯 Archetype identified: **{guessed_archetype}**")
+                        sources = retrieve_by_archetype(guessed_archetype, k=30)
+                else:
+                    sources = retrieve_relevant_cards(prompt, k=5)
+
+            st.write(f"✅ Found {len(sources)} relevant card(s)")
+            st.write("📚 Retrieved cards: " + ", ".join(meta.get("name", "Unknown") for _, meta in sources[:5]))
+            st.write("🤖 Generating answer...")
+
+            context = "\n\n".join(doc for doc, _ in sources)
+            history_text = "\n".join(f"{m['role']}: {m['content']}" for m in st.session_state.messages[-6:])
+
+            prompt_text = f"""Answer using ONLY the card names and facts listed in the context below.
+Do not invent or guess any card names. If a card is not listed in the context, do not mention it.
+If the question refers to something from earlier in the conversation (like "how many" or "those cards"), use the conversation history to understand what is being asked.
+
+Conversation so far:
+{history_text}
+
+Context:
+{context}
+
+Question: {prompt}
+Answer:"""
+            response = llm.invoke(prompt_text)
+            answer = response.content
+            
+            status.update(label="Done", state="complete", expanded=False)
+
         st.write(answer)
         # Sources expander with images
         with st.expander("Sources"):
