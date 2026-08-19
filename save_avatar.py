@@ -8,10 +8,10 @@ with open("all_cards.json") as f:
 def get_card_image_url(card_name):
     for c in cards:
         if c["name"] == card_name:
-            return c["card_images"][0]["image_url"]
+            return c["card_images"][0]["image_url_cropped"]
     return None
 
-url = get_card_image_url("Dark Magician")
+url = get_card_image_url("Kuriboh")
 if url:
     os.makedirs("assets", exist_ok=True)
     resp = requests.get(url)
