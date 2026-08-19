@@ -204,10 +204,10 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Display conversation history
-    for msg in st.session_state.messages:
-        avatar = BOT_AVATAR if msg["role"] == "assistant" else None
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.write(msg["content"])
+for msg in st.session_state.messages:
+    avatar = BOT_AVATAR if msg["role"] == "assistant" else None
+    with st.chat_message(msg["role"], avatar=avatar):
+        st.write(msg["content"])
 
 # Chat input (real-time assistant-style)
 prompt = st.chat_input("Ask me about Yu-Gi-Oh! cards")
@@ -222,7 +222,6 @@ if prompt:
         intent = classify_intent(prompt)
         
         if intent == "general":
-            st.write("Thinking...")
             response = llm.invoke(f"You are a friendly Yu-Gi-Oh card assistant. Respond naturally and briefly to this message: {prompt}")
             answer = response.content
             st.markdown(answer)
