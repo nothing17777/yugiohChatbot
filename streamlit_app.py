@@ -95,18 +95,82 @@ Answer:"""
     response = llm.invoke(prompt)
     return response.content, sources
 
+BOT_AVATAR = "assets/bot_avatar.jpg"
+
 # Streamlit UI
+st.set_page_config(page_title="Yu-Gi-Oh! RAG Chatbot", page_icon="🃏", layout="wide")
+
+st.markdown("""
+<style>
+/* Centered narrow chat column */
+.block-container {
+    max-width: 720px !important;
+    padding-top: 2rem !important;
+    padding-bottom: 0 !important;
+}
+
+/* Smaller, subtle header */
+h1 {
+    font-size: 1.4rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.2rem !important;
+}
+
+/* Shrink caption */
+.stCaption p {
+    font-size: 0.75rem !important;
+    opacity: 0.5 !important;
+}
+
+/* Spacing between chat messages */
+.stChatMessage {
+    margin-bottom: 1.2rem !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.2rem !important;
+}
+
+/* Assistant message subtle background */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]),
+[data-testid="stChatMessage"]:has(img) {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* User message slightly different shade */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    background-color: transparent !important;
+}
+
+/* Rounded pill-style chat input */
+[data-testid="stChatInput"] {
+    border-radius: 24px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15) !important;
+    overflow: hidden;
+}
+
+[data-testid="stChatInput"] textarea {
+    border-radius: 24px !important;
+}
+
+/* Status expander styling */
+[data-testid="stStatusWidget"] {
+    border-radius: 12px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🃏 Yu-Gi-Oh! RAG Chatbot")
-st.caption("Ask anything about Yu-Gi-Oh! cards – the bot will retrieve relevant cards and generate an answer.")
+st.caption("Ask anything about Yu-Gi-Oh! cards")
 
 # Initialize session state for conversation history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Display conversation history
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+    for msg in st.session_state.messages:
+        avatar = BOT_AVATAR if msg["role"] == "assistant" else None
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.write(msg["content"])
 
 # Chat input (real-time assistant-style)
 prompt = st.chat_input("Ask me about Yu-Gi-Oh! cards")
@@ -117,7 +181,7 @@ if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Generate answer
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar="assets/bot_avatar.jpg"):
         # Check for archetype/listing request first (Bypass LLM for accuracy)
         if "archetype" in prompt.lower() or "cards in" in prompt.lower():
             with st.status("Thinking...", expanded=True) as status:
