@@ -41,6 +41,15 @@ def retrieve_relevant_cards(query, k=5):
     return list(zip(docs, metadatas))
 
 
+def retrieve_by_archetype(archetype_name, k=30):
+    results = collection.query(
+        query_embeddings=model.encode([archetype_name]).tolist(),
+        n_results=k,
+        where={"archetype": archetype_name}
+    )
+    return list(zip(results["documents"][0], results["metadatas"][0]))
+
+
 def classify_intent(question: str) -> str:
     prompt = f"""Classify the following question as either "card_question" or "general".
 "card_question" = about cards, rules, archetypes, stats, effects, combos.
@@ -57,55 +66,16 @@ Answer:"""
     except:
         return "card_question"
 
-def generate_answer(question: str, history: list, cached_sources=None):
-    """Run the RAG pipeline: retrieve → prompt → LLM.
-    Returns (answer, sources) where sources is a list of (doc, meta) tuples.
-    """
-    # Use cached sources if provided and question looks like a follow-up
-    if cached_sources is not None and (
-        "how many" in question.lower() or 
-        "total" in question.lower() or
-        "those cards" in question.lower() or
-        "these cards" in question.lower() or
-        len(question.strip().split()) <= 3  # Very short questions likely to be follow-ups
-    ):
-        sources = cached_sources
-    else:
-        # crude check: does the question look like an archetype listing request?
-        if "archetype" in question.lower() or "cards in" in question.lower():
-            # do a small semantic lookup first to find the exact archetype name in the DB
-            # (the DB stores names like "Ritual Beast", not whatever the user typed)
-            sources = retrieve_relevant_cards(question, k=5)
-            guessed_archetype = sources[0][1].get("archetype", "")
-            if guessed_archetype:
-                sources = retrieve_by_archetype(guessed_archetype, k=30)
-        else:
-            sources = retrieve_relevant_cards(question, k=5)
-
-    context = "\n\n".join(doc for doc, _ in sources)
-
-    # include prior turns so follow-ups like "how many total" resolve correctly
-    history_text = "\n".join(f"{m['role']}: {m['content']}" for m in history[-6:])  # last few turns
-
-    prompt = f"""Answer using ONLY the card names and facts listed in the context below.
-Do not invent or guess any card names. If a card is not listed in the context, do not mention it.
-If the question refers to something from earlier in the conversation (like "how many" or "those cards"), use the conversation history to understand what is being asked.
-
-Conversation so far:
-{history_text}
-
-Context:
-{context}
-
-Question: {question}
-Answer:"""
-    response = llm.invoke(prompt)
-    return response.content, sources
 
 BOT_AVATAR = "assets/bot_avatar.jpg"
 
 # Streamlit UI
 st.set_page_config(page_title="Yu-Gi-Oh! RAG Chatbot", page_icon="assets/bot_avatar.jpg", layout="wide")
+
+with st.sidebar:
+    st.button("＋ New chat")
+    st.button("🔍 Search")
+    st.button("💬 History")
 
 st.markdown("""
 <style>
@@ -188,6 +158,18 @@ header[data-testid="stHeader"] {
 [data-testid="stStatusWidget"] {
     border-radius: 12px !important;
 }
+
+[data-testid="stSidebar"] {
+    background-color: #000000;
+    width: 220px !important;
+}
+[data-testid="stSidebar"] button {
+    background: transparent !important;
+    border: none !important;
+    text-align: left !important;
+    color: rgba(255,255,255,0.8) !important;
+    font-size: 0.9rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -202,6 +184,12 @@ st.caption("Ask anything about Yu-Gi-Oh! cards")
 # Initialize session state for conversation history
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if not st.session_state.messages:
+    st.markdown(
+        "<h2 style='text-align:center; margin-top:12vh; opacity:0.85; font-weight:500;'>Where should we begin?</h2>",
+        unsafe_allow_html=True
+    )
 
 # Display conversation history
 for msg in st.session_state.messages:
